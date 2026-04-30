@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Starlight Children's Foundation — Org Chart</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #E8B86D; --gold-lt: #F5D49A; --navy: #0D1B2A;
+    --navy-mid: #162235; --navy-lt: #1E3050; --slate: #2D4A6B;
+    --muted: #8BA3C0; --text: #E8EEF5; --text-dim: #8BA3C0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'DM Sans', sans-serif; background: var(--navy); color: var(--text); }
+
+  /* ── HEADER ── */
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 58px; display: flex; align-items: center; gap: 14px;
+    padding: 0 24px;
+    background: rgba(13,27,42,0.92); backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(232,184,109,0.2);
+  }
+  #header svg { flex-shrink: 0; }
+  #header h1 { font-family: 'DM Serif Display', serif; font-size: 1.15rem; color: var(--gold); white-space: nowrap; }
+  #header p { font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  .h-sep { width: 1px; height: 28px; background: rgba(232,184,109,0.2); flex-shrink: 0; }
+
+  /* ── CONTROLS ── */
+  #controls {
+    position: fixed; top: 58px; left: 0; right: 0; z-index: 99;
+    padding: 8px 24px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: rgba(13,27,42,0.8); backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(232,184,109,0.1);
+  }
+  .filter-btn {
+    padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(232,184,109,0.25);
+    background: transparent; color: var(--text-dim); font-family: 'DM Sans', sans-serif;
+    font-size: 0.7rem; font-weight: 500; cursor: pointer; transition: all 0.18s; white-space: nowrap;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    background: var(--gold); border-color: var(--gold); color: var(--navy); font-weight: 600;
+  }
+  .ctrl-sep { flex: 1; }
+  .zoom-btn {
+    width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(232,184,109,0.25);
+    background: transparent; color: var(--gold); font-size: 1.1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+  }
+  .zoom-btn:hover { background: rgba(232,184,109,0.12); }
+  #zoom-label { font-size: 0.7rem; color: var(--muted); min-width: 38px; text-align: center; }
+  .hint { font-size: 0.65rem; color: var(--text-dim); opacity: 0.6; }
+
+  /* ── CANVAS AREA ── */
+  #stage {
+    position: fixed; inset: 0; top: 100px;
+    overflow: hidden; cursor: grab;
+    background: radial-gradient(ellipse at 20% 40%, rgba(232,184,109,0.04) 0%, transparent 55%),
+                radial-gradient(ellipse at 80% 60%, rgba(45,74,107,0.3) 0%, transparent 55%),
+                var(--navy);
+  }
+  #stage.dragging { cursor: grabbing; }
+  #world { position: absolute; transform-origin: 0 0; will-change: transform; }
+
+  /* ── NODES ── */
+  .node {
+    position: absolute;
+    background: rgba(22,34,53,0.92);
+    border: 1px solid rgba(232,184,109,0.22);
+    border-radius: 10px;
+    padding: 10px 10px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+    backdrop-filter: blur(4px);
+    user-select: none;
+  }
+  .node:hover {
+    border-color: var(--gold);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(232,184,109,0.25);
+    transform: translateY(-2px);
+    z-index: 10 !important;
+  }
+  .node.root {
+    background: linear-gradient(135deg, rgba(232,184,109,0.12), rgba(22,34,53,0.97));
+    border-color: var(--gold); border-width: 1.5px;
+  }
+  .node.lvl1 {
+    background: linear-gradient(135deg, rgba(45,74,107,0.5), rgba(22,34,53,0.95));
+    border-color: rgba(232,184,109,0.32);
+  }
+  .node.dimmed { opacity: 0.18 !important; pointer-events: none; }
+
+  .node img {
+    width: 38px; height: 38px; border-radius: 50%;
+    object-fit: cover; display: block; margin: 0 auto 5px;
+    border: 1.5px solid rgba(232,184,109,0.35);
+    background: var(--slate);
+  }
+  .node.root img { width: 46px; height: 46px; border-color: var(--gold); }
+  .node .n-name { font-size: 0.7rem; font-weight: 600; color: var(--text); line-height: 1.25; margin-bottom: 2px; }
+  .node.root .n-name { font-size: 0.75rem; }
+  .node .n-title { font-size: 0.56rem; color: var(--gold-lt); line-height: 1.3; margin-bottom: 5px; }
+  .node .n-divider { border: none; border-top: 1px solid rgba(232,184,109,0.15); margin: 4px 0 5px; }
+  .node .n-resp { text-align: left; }
+  .node .n-resp-item {
+    display: flex; gap: 4px; align-items: flex-start;
+    font-size: 0.53rem; color: var(--text-dim); line-height: 1.35; margin-bottom: 2px;
+  }
+  .node .n-resp-item::before { content: '›'; color: var(--gold); flex-shrink: 0; font-size: 0.6rem; line-height: 1.2; }
+  .node .n-badge {
+    position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--gold); color: var(--navy); font-size: 0.52rem; font-weight: 700;
+    padding: 1px 6px; border-radius: 8px; white-space: nowrap; z-index: 2;
+  }
+
+  /* ── SVG LINES ── */
+  #lines-svg {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; overflow: visible;
+  }
+  .edge { fill: none; stroke: rgba(232,184,109,0.22); stroke-width: 1.5; }
+
+  /* ── TOOLTIP ── */
+  #tooltip {
+    position: fixed; z-index: 500;
+    background: rgba(10,20,35,0.98); border: 1px solid var(--gold);
+    border-radius: 12px; padding: 14px 16px;
+    pointer-events: none; max-width: 270px;
+    opacity: 0; transition: opacity 0.14s;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  }
+  #tooltip.show { opacity: 1; }
+  #tooltip .tt-name { font-family: 'DM Serif Display', serif; font-size: 0.95rem; color: var(--gold); margin-bottom: 2px; }
+  #tooltip .tt-job { font-size: 0.68rem; color: var(--text); line-height: 1.4; margin-bottom: 7px; }
+  #tooltip .tt-meta { font-size: 0.64rem; color: var(--text-dim); margin-bottom: 2px; }
+  #tooltip .tt-meta b { color: var(--muted); }
+  #tooltip hr { border: none; border-top: 1px solid rgba(232,184,109,0.18); margin: 8px 0 7px; }
+  #tooltip .tt-rlabel { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); font-weight: 600; margin-bottom: 5px; }
+  #tooltip .tt-ri { display: flex; gap: 5px; font-size: 0.64rem; color: var(--text-dim); line-height: 1.4; margin-bottom: 3px; }
+  #tooltip .tt-ri::before { content: '›'; color: var(--gold); flex-shrink: 0; }
+
+  /* ── MINIMAP ── */
+  #minimap {
+    position: fixed; bottom: 20px; right: 20px; z-index: 200;
+    width: 160px; height: 90px;
+    background: rgba(13,27,42,0.85); border: 1px solid rgba(232,184,109,0.2);
+    border-radius: 8px; overflow: hidden; cursor: pointer;
+  }
+  #minimap canvas { width: 100%; height: 100%; }
+  #mm-label { position: absolute; bottom: 4px; left: 6px; font-size: 0.55rem; color: var(--muted); }
+
+  /* ── STARFIELD ── */
+  #starfield { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<!-- Header -->
+<div id="header">
+  <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
+    <polygon points="22,2 27,16 42,16 30,25 35,40 22,31 9,40 14,25 2,16 17,16"
+      fill="none" stroke="#E8B86D" stroke-width="1.5" stroke-linejoin="round"/>
+    <polygon points="22,8 25.5,18 36,18 28,24 31,34 22,28 13,34 16,24 8,18 18.5,18"
+      fill="rgba(232,184,109,0.15)"/>
+  </svg>
+  <div>
+    <h1>Starlight Children's Foundation</h1>
+    <p>Organizational Chart · March 2026</p>
+  </div>
+</div>
+
+<!-- Controls -->
+<div id="controls">
+  <button class="filter-btn active" data-dept="all">All</button>
+  <div class="ctrl-sep"></div>
+  <span class="hint">Scroll to zoom · Drag to pan</span>
+  <button class="zoom-btn" id="zoom-out">−</button>
+  <span id="zoom-label">100%</span>
+  <button class="zoom-btn" id="zoom-in">+</button>
+  <button class="zoom-btn" id="zoom-fit" title="Fit to screen" style="width:auto;padding:0 8px;font-size:0.65rem;">Fit</button>
+</div>
+
+<!-- Stage -->
+<div id="stage">
+  <div id="world">
+    <svg id="lines-svg"></svg>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<!-- Minimap -->
+<div id="minimap"><canvas id="mm-canvas"></canvas><span id="mm-label">Overview</span></div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const responsibilities = {
+  "Rhiannon Chelini": ["NetSuite system workflow and oversight","Human Resources and Culture Strategy","Financial reporting and policy compliance"],
+  "Bea Canete": ["Accounts payable accuracy and timeliness","Accounts receivable posting and record retention","Payroll and insurance processing"],
+  "Cindee Starkie": ["Brand Strategy & Positioning","Marketing & Communications Leadership","Cross-functional collaboration"],
+  "Rick Jardiolin": ["Thought-leadership Platform","Talent Ambassador Program","Publicity and Media leadership"],
+  "Valerie Jones": ["Social Media Management","Media story development","Media pitching"],
+  "Cailyn Vargas": ["Paid Advertising","Website Development","Analytics & Marketing Metrics"],
+  "Adam Martinez": ["Email journey's and segmentation","Lead Gen","Email database management"],
+  "Kayla Jackson": ["Content Development","Marketing research","SEO and Website stories"],
+  "Becky Roesler": ["Graphic Design","Merchandise","Brand implementation"],
+  "Sandra Gerstel": ["Overall program distribution and impact planning","Program development - new and current programming","Overall program management"],
+  "Sara Hewston": ["Monthly distribution planning and impact reporting","The Starlight Portal oversight and management","Program Placement request and management"],
+  "Peyton Gelley": ["Starlight Family program management","Starlight Family engagement and stewardship","Starlight Family impact planning and reporting"],
+  "Viktoria de Jong": ["Grant lifecycle","Hospital engagement and stewardship","Mission Delivery (hospital and family) event and marketing coordination and support"],
+  "Ashley Elster": ["Inventory valuation and reporting","Warehouse oversight","Program distribution and fulfillment inquiries"],
+  "Mike Olson": ["Financial strategy & planning","Reporting, compliance & controls","Cash flow & capital management"],
+  "Alex Mistuloff": ["System configuration & maintenance","Process automation & workflows","Data integrity & reporting"],
+  "Christine Soldner": ["Oversees partnership team strategy and revenue goals","Develops and manages a portfolio of corporate partners","Collaborates cross-functionally to design and execute partner programs and initiatives"],
+  "Matt Barnhart": ["Develops and manages a portfolio of corporate partners","Collaborates cross-functionally to design and execute partner programs and initiatives"],
+  "McShane Jordan": ["Develops and manages a portfolio of corporate partners","Collaborates cross-functionally to design and execute partner programs and initiatives","Manages Workplace Giving & Corporate Matching program"],
+};
+
+const people = [
+  {name:"Adam Garone",title:"CEO (LT)",dept:"Executive",reportsTo:null,avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/c6e3ba50-7cd6-4e4d-a1fa-db95114d09b7/a476fe65-93ac-493b-8b0f-59097fd7152b.png",email:"adam.garone@starlight.org"},
+  {name:"Mike Olson",title:"CFO (LT)",dept:"Finance & Operations",reportsTo:"Adam Garone",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/50522718-fc25-4960-9fcf-c73a99a443db/e0ca08a6-fcc3-4620-acda-197917b603e1.png",email:""},
+  {name:"Aimee Finn",title:"Sr. Director, Individual Giving (LT)",dept:"Individual Giving",reportsTo:"Adam Garone",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/bf9ac2f9-bd97-47ce-82d8-baa2d920bc9a/bccdf426-1c2c-4782-9a20-c0aa84bcd22b.png",email:"aimee.finn@starlight.org"},
+  {name:"Christine Soldner",title:"Sr. Director, Partnerships (LT)",dept:"Partnerships",reportsTo:"Adam Garone",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/35b48831-5bd8-4273-a08c-e6c4fd5730ca/fa25d1c8-b299-4cea-92e7-f719331dcda2.png",email:"christine.soldner@starlight.org"},
+  {name:"Cindee Starkie",title:"VP, Marketing & Communications (LT)",dept:"Marketing & Communications",reportsTo:"Adam Garone",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/70d351ee-ab43-4116-af09-79bf3b629919/a65e5115-cf79-4b91-a1fe-90f9d40fb6e1.png",email:""},
+  {name:"Rhiannon Chelini",title:"Controller & HR Manager",dept:"Finance & Operations",reportsTo:"Mike Olson",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/6d1c05cb-25f0-49bb-a5e5-e716208cb72c/afcc6edc-9cb2-4a38-b180-a0d7175c4178.png",email:""},
+  {name:"Sandra Gerstel",title:"Sr. Director, Mission Delivery (LT)",dept:"Mission Delivery",reportsTo:"Mike Olson",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/b4be0841-4bf6-4553-bb68-7f694e81f2a3/5f7f5911-4ec3-4408-ad90-a2f8edf1869f.png",email:"sandra.gerstel@starlight.org"},
+  {name:"Alex Mistuloff",title:"Operations Systems Administrator",dept:"Finance & Operations",reportsTo:"Mike Olson",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/c85b559f-aa97-45ba-a5cc-1bcf32d8a24d/dcd17432-d301-42c4-b22d-2377beafb8d5.png",email:"alex.mistuloff@starlight.org"},
+  {name:"Bea Canete",title:"Accountant",dept:"Finance & Operations",reportsTo:"Rhiannon Chelini",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/3f1bd7de-689f-40bf-9493-b0bbd7d2aabb/524a80fc-2e80-48b9-8b31-c0f2513f05ea.png",email:""},
+  {name:"Sara Hewston",title:"Director, Mission Delivery",dept:"Mission Delivery",reportsTo:"Sandra Gerstel",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/f7b7df46-863d-4951-9acb-c14c1d606029/8a1a71ee-7e21-4f2b-b10c-f4c74fa1fb58.png",email:"sara.matthews@starlight.org"},
+  {name:"Peyton Gelley",title:"Manager, Starlight Families",dept:"Mission Delivery",reportsTo:"Sandra Gerstel",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/aba60eaf-f06d-4d4d-9ead-4deb05119595/15e39d2f-8e2e-4940-bfaf-f38341af8293.png",email:""},
+  {name:"Viktoria de Jong",title:"Sr. Coordinator, Mission Delivery",dept:"Mission Delivery",reportsTo:"Sandra Gerstel",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/c24d6698-6b2a-4b77-8da6-ae0ed542abd6/d34e8f1d-3097-4920-936f-2bdc5302075a.png",email:""},
+  {name:"Ashley Elster",title:"Coordinator, Logistics & Distribution",dept:"Mission Delivery",reportsTo:"Sara Hewston",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/041b427b-824d-46e8-af9c-16c7a2097056/74fd95f4-dc7f-4143-990b-d57d14785d99.png",email:""},
+  {name:"Madison Shearer",title:"Sr. Manager, Fundraising & Events",dept:"Individual Giving",reportsTo:"Aimee Finn",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/ae710b46-2ae5-4206-8f85-a8a26275d05d/148c8042-ca85-4767-aa5d-509a6375cc38.png",email:"madison.shearer@starlight.org"},
+  {name:"Sarah Pressley",title:"Sr. Manager, Community Engagement",dept:"Individual Giving",reportsTo:"Aimee Finn",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/64026a47-3fcb-4cad-a857-90b0bfea33c3/9f07d869-25a1-4d83-b403-27b7e26dbac1.png",email:""},
+  {name:"Adam Colcord",title:"Coordinator, Individual Giving",dept:"Individual Giving",reportsTo:"Madison Shearer",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/ede28a37-7601-4235-bae5-055b7fb5f5a8/d36c27f9-7c75-40f0-bc1b-b4f93a81d30f.png",email:""},
+  {name:"Logan Allison",title:"Manager, Fundraising",dept:"Individual Giving",reportsTo:"Madison Shearer",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/d1ed72fe-f956-438f-b08f-5b8cf1ebb28a/ded0a327-f9b2-4976-b901-df68e5b39edf.png",email:""},
+  {name:"Devan Tozzo",title:"Sr. Coordinator, Streaming Engagement",dept:"Individual Giving",reportsTo:"Sarah Pressley",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/8721e145-bb27-41dd-a96d-8af3abc837dd/36d33fcc-3e81-4fa2-bb41-6195e534b0d4.png",email:""},
+  {name:"Dominic Tovar",title:"Sr. Coordinator, S4S Community Engagement",dept:"Individual Giving",reportsTo:"Sarah Pressley",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/68323beb-eaa7-4791-9669-8a130e2807fe/a87e717b-5eda-4b79-bfa2-9171c62d82ad.png",email:"dominic.tovar@starlight.org"},
+  {name:"Tara Millspaugh",title:"Streaming Specialist P/T",dept:"Individual Giving",reportsTo:"Sarah Pressley",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/0da801ca-f9db-4ec7-a567-a50e810181af/6a8c1fa7-972b-4923-861d-2aff14258381.png",email:"tara.millspaugh@starlight.org"},
+  {name:"Matt Barnhart",title:"Sr. Manager, Partnerships",dept:"Partnerships",reportsTo:"Christine Soldner",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/00b421af-e3a2-4b4c-a89e-899a35b39fee/2964a43f-9da7-4a38-b036-f2e78c8dde67.png",email:"matt.barnhart@starlight.org"},
+  {name:"McShane Jordan",title:"Sr. Coordinator, Corporate Partnerships",dept:"Partnerships",reportsTo:"Christine Soldner",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/00fb87ea-be8b-4d4a-9773-36a04acd05db/64c55742-2911-46b7-aced-a18b939e6545.png",email:""},
+  {name:"Cailyn Vargas",title:"Sr. Manager, Growth Marketing",dept:"Marketing & Communications",reportsTo:"Cindee Starkie",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/84e36a69-5d7c-47a1-be85-7cbccb89e479/7b884983-ef59-4400-91b3-2b4ce5b83358.png",email:""},
+  {name:"Rick Jardiolin",title:"Sr. Director, PR & Communications (LT)",dept:"Marketing & Communications",reportsTo:"Cindee Starkie",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/5228b9a9-a46a-492c-9b5c-054323bf740f/9791bd4f-f0bc-49b3-8734-42b3ce14682b.png",email:""},
+  {name:"Becky Roesler",title:"Graphic Designer",dept:"Marketing & Communications",reportsTo:"Cindee Starkie",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/d4311277-cd14-4e6d-9e29-ad08ba6a9b11/01b96421-6fab-4a2c-aca5-54a2b1497937.png",email:"becky.roesler@starlight.org"},
+  {name:"Kayla Jackson",title:"Specialist, Marketing & Communications",dept:"Marketing & Communications",reportsTo:"Cindee Starkie",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/c70f7920-f979-4a0a-83dc-74315f4e7964/8461a226-8d80-4810-bec3-bded25bf4f32.png",email:""},
+  {name:"Adam Martinez",title:"Email & Digital Marketing Specialist",dept:"Marketing & Communications",reportsTo:"Cailyn Vargas",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/23d35101-a7ad-440a-8d33-ee22ad17635b/3af447b5-04f7-4158-b8b7-65e64a649bed.png",email:""},
+  {name:"Valerie Jones",title:"Specialist, Public Relations",dept:"Marketing & Communications",reportsTo:"Rick Jardiolin",avatar:"https://cdn.platform.workleap.com/avatars/organizations/3eed7282-9b44-4c9c-9dba-fb54bca0afe7/members/26bc29be-84ad-4660-826c-d7b29d7b5581/3ee034f7-cfe4-40d2-aa4e-8743dc9ef7e8.png",email:""},
+];
+
+// ── LAYOUT ────────────────────────────────────────────────────────────────────
+// Node dimensions — wider & taller to fit responsibilities
+const NW = 175, NH = 148, HGAP = 28, VGAP = 80;
+
+// Build tree structure
+const byName = {};
+people.forEach(p => byName[p.name] = {...p, children: []});
+people.forEach(p => { if (p.reportsTo && byName[p.reportsTo]) byName[p.reportsTo].children.push(byName[p.name]); });
+const root = byName["Adam Garone"];
+
+// Compute subtree widths
+function calcWidth(node) {
+  if (!node.children.length) { node._w = NW; return NW; }
+  const childTotal = node.children.reduce((s, c) => s + calcWidth(c), 0) + HGAP * (node.children.length - 1);
+  node._w = Math.max(NW, childTotal);
+  return node._w;
+}
+calcWidth(root);
+
+// Assign x,y positions
+function assignPos(node, x, y) {
+  node._x = x + (node._w - NW) / 2;
+  node._y = y;
+  if (!node.children.length) return;
+  let cx = x;
+  node.children.forEach(child => {
+    assignPos(child, cx, y + NH + VGAP);
+    cx += child._w + HGAP;
+  });
+}
+assignPos(root, 0, 0);
+
+// Compute bounds
+let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+function bounds(node) {
+  minX = Math.min(minX, node._x); minY = Math.min(minY, node._y);
+  maxX = Math.max(maxX, node._x + NW); maxY = Math.max(maxY, node._y + NH);
+  node.children.forEach(bounds);
+}
+bounds(root);
+const totalW = maxX - minX + 80;
+const totalH = maxY - minY + 80;
+
+// Offset everything so it starts at (40,40)
+function shift(node) {
+  node._x -= minX - 40;
+  node._y -= minY - 40;
+  node.children.forEach(shift);
+}
+shift(root);
+
+// ── BUILD DOM ─────────────────────────────────────────────────────────────────
+const world = document.getElementById('world');
+const svg = document.getElementById('lines-svg');
+svg.setAttribute('width', totalW);
+svg.setAttribute('height', totalH);
+world.style.width = totalW + 'px';
+world.style.height = totalH + 'px';
+
+const nodeEls = {};
+
+function buildNode(node, depth) {
+  const el = document.createElement('div');
+  el.className = 'node' + (depth === 0 ? ' root' : depth === 1 ? ' lvl1' : '');
+  el.dataset.name = node.name;
+  el.dataset.dept = node.dept;
+  el.style.cssText = `left:${node._x}px;top:${node._y}px;width:${NW}px;z-index:${depth+1};`;
+
+  const img = document.createElement('img');
+  img.src = node.avatar;
+  img.alt = node.name;
+  img.onerror = () => { img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(node.name)}&background=2D4A6B&color=E8B86D&size=54`; };
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'n-name';
+  nameEl.textContent = node.name;
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'n-title';
+  titleEl.textContent = node.title;
+
+  el.append(img, nameEl, titleEl);
+
+  // Responsibilities on card
+  const resp = responsibilities[node.name];
+  if (resp) {
+    const hr = document.createElement('hr');
+    hr.className = 'n-divider';
+    const respEl = document.createElement('div');
+    respEl.className = 'n-resp';
+    resp.forEach(r => {
+      const item = document.createElement('div');
+      item.className = 'n-resp-item';
+      item.textContent = r;
+      respEl.appendChild(item);
+    });
+    el.append(hr, respEl);
+  }
+
+  if (node.children.length) {
+    const badge = document.createElement('div');
+    badge.className = 'n-badge';
+    badge.textContent = node.children.length + ' direct' + (node.children.length > 1 ? 's' : '');
+    el.appendChild(badge);
+  }
+
+  el.addEventListener('mouseenter', e => showTip(node, e));
+  el.addEventListener('mousemove', moveTip);
+  el.addEventListener('mouseleave', hideTip);
+
+  world.appendChild(el);
+  nodeEls[node.name] = el;
+  node.children.forEach(c => buildNode(c, depth + 1));
+}
+buildNode(root, 0);
+
+// Draw SVG edges — uses actual rendered height via offsetHeight
+function drawEdges(node) {
+  const el = nodeEls[node.name];
+  const h = el ? el.offsetHeight : NH;
+  const px = node._x + NW / 2;
+  const py = node._y + h;
+  node.children.forEach(child => {
+    const cx = child._x + NW / 2;
+    const cy = child._y;
+    const my = py + (cy - py) * 0.5;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'edge');
+    path.setAttribute('d', `M${px},${py} C${px},${my} ${cx},${my} ${cx},${cy}`);
+    svg.appendChild(path);
+    drawEdges(child);
+  });
+}
+
+// ── DEPT FILTERS ──────────────────────────────────────────────────────────────
+const depts = [...new Set(people.map(p => p.dept))].sort();
+const ctrlBar = document.getElementById('controls');
+const allBtn = ctrlBar.querySelector('[data-dept="all"]');
+
+depts.forEach(d => {
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn';
+  btn.textContent = d;
+  btn.dataset.dept = d;
+  allBtn.after(btn);
+});
+
+let activeDept = 'all';
+ctrlBar.addEventListener('click', e => {
+  if (!e.target.matches('.filter-btn')) return;
+  activeDept = e.target.dataset.dept;
+  ctrlBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  document.querySelectorAll('.node').forEach(n => {
+    n.classList.toggle('dimmed', activeDept !== 'all' && n.dataset.dept !== activeDept);
+  });
+  svg.querySelectorAll('.edge').forEach(e => {
+    e.style.opacity = activeDept === 'all' ? '' : '0.08';
+  });
+});
+
+// ── PAN & ZOOM ────────────────────────────────────────────────────────────────
+const stage = document.getElementById('stage');
+let tx = 0, ty = 0, scale = 1;
+let dragging = false, lastX = 0, lastY = 0;
+
+function applyTransform() {
+  world.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+  document.getElementById('zoom-label').textContent = Math.round(scale * 100) + '%';
+  drawMinimap();
+}
+
+function fitToScreen() {
+  const sw = stage.clientWidth, sh = stage.clientHeight;
+  const sx = sw / totalW, sy = sh / totalH;
+  scale = Math.min(sx, sy, 1) * 0.92;
+  tx = (sw - totalW * scale) / 2;
+  ty = (sh - totalH * scale) / 2;
+  applyTransform();
+}
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const rect = stage.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const newScale = Math.max(0.15, Math.min(2.5, scale * delta));
+  tx = mx - (mx - tx) * (newScale / scale);
+  ty = my - (my - ty) * (newScale / scale);
+  scale = newScale;
+  applyTransform();
+}, { passive: false });
+
+stage.addEventListener('mousedown', e => {
+  if (e.target.closest('.node')) return;
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  stage.classList.add('dragging');
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  tx += e.clientX - lastX; ty += e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { dragging = false; stage.classList.remove('dragging'); });
+
+// Touch pan/pinch
+let touches = [], initDist = 0, initScale = 1, initTx = 0, initTy = 0;
+stage.addEventListener('touchstart', e => {
+  touches = [...e.touches];
+  if (touches.length === 2) {
+    initDist = Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    initScale = scale; initTx = tx; initTy = ty;
+  }
+}, {passive: true});
+stage.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && touches.length === 1) {
+    tx += e.touches[0].clientX - touches[0].clientX;
+    ty += e.touches[0].clientY - touches[0].clientY;
+    touches = [...e.touches]; applyTransform();
+  } else if (e.touches.length === 2) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    const newScale = Math.max(0.15, Math.min(2.5, initScale * dist / initDist));
+    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const rect = stage.getBoundingClientRect();
+    tx = cx - rect.left - (cx - rect.left - initTx) * (newScale / initScale);
+    ty = cy - rect.top  - (cy - rect.top  - initTy) * (newScale / initScale);
+    scale = newScale; applyTransform();
+  }
+  e.preventDefault();
+}, {passive: false});
+
+document.getElementById('zoom-in').addEventListener('click', () => {
+  scale = Math.min(2.5, scale * 1.2);
+  tx = stage.clientWidth / 2 - (stage.clientWidth / 2 - tx) * 1.2;
+  ty = stage.clientHeight / 2 - (stage.clientHeight / 2 - ty) * 1.2;
+  applyTransform();
+});
+document.getElementById('zoom-out').addEventListener('click', () => {
+  scale = Math.max(0.15, scale / 1.2);
+  tx = stage.clientWidth / 2 - (stage.clientWidth / 2 - tx) / 1.2;
+  ty = stage.clientHeight / 2 - (stage.clientHeight / 2 - ty) / 1.2;
+  applyTransform();
+});
+document.getElementById('zoom-fit').addEventListener('click', fitToScreen);
+
+// ── TOOLTIP ───────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTip(person, e) {
+  const resp = responsibilities[person.name];
+  tooltip.innerHTML = `
+    <div class="tt-name">${person.name}</div>
+    <div class="tt-job">${person.title}</div>
+    ${person.email ? `<div class="tt-meta"><b>Email:</b> ${person.email}</div>` : ''}
+    <div class="tt-meta"><b>Dept:</b> ${person.dept}</div>
+    ${person.reportsTo ? `<div class="tt-meta"><b>Reports to:</b> ${person.reportsTo}</div>` : ''}
+    ${person.children.length ? `<div class="tt-meta"><b>Direct reports:</b> ${person.children.length}</div>` : ''}
+    ${resp ? `<hr><div class="tt-rlabel">Key Responsibilities</div>${resp.map(r=>`<div class="tt-ri">${r}</div>`).join('')}` : ''}
+  `;
+  tooltip.classList.add('show');
+  moveTip(e);
+}
+function moveTip(e) {
+  const x = e.clientX + 16, y = e.clientY - 10;
+  tooltip.style.left = Math.min(x, window.innerWidth - 285) + 'px';
+  tooltip.style.top  = Math.min(y, window.innerHeight - tooltip.offsetHeight - 10) + 'px';
+}
+function hideTip() { tooltip.classList.remove('show'); }
+
+// ── MINIMAP ───────────────────────────────────────────────────────────────────
+const mmCanvas = document.getElementById('mm-canvas');
+const mmCtx = mmCanvas.getContext('2d');
+const mmEl = document.getElementById('minimap');
+
+function drawMinimap() {
+  const mw = mmEl.clientWidth, mh = mmEl.clientHeight;
+  mmCanvas.width = mw * devicePixelRatio; mmCanvas.height = mh * devicePixelRatio;
+  mmCtx.scale(devicePixelRatio, devicePixelRatio);
+  mmCtx.clearRect(0, 0, mw, mh);
+  const sx = mw / totalW, sy = mh / totalH, ms = Math.min(sx, sy);
+
+  // Draw nodes
+  people.forEach(p => {
+    const node = byName[p.name];
+    mmCtx.fillStyle = activeDept === 'all' || p.dept === activeDept
+      ? 'rgba(232,184,109,0.5)' : 'rgba(232,184,109,0.1)';
+    mmCtx.fillRect(node._x * ms, node._y * ms, NW * ms, NH * ms * 0.6);
+  });
+
+  // Draw viewport rect
+  const sw = stage.clientWidth, sh = stage.clientHeight;
+  const vx = (-tx / scale) * ms, vy = (-ty / scale) * ms;
+  const vw = (sw / scale) * ms, vh = (sh / scale) * ms;
+  mmCtx.strokeStyle = 'rgba(232,184,109,0.8)';
+  mmCtx.lineWidth = 1.5;
+  mmCtx.strokeRect(vx, vy, vw, vh);
+}
+
+mmEl.addEventListener('click', e => {
+  const rect = mmEl.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / mmEl.clientWidth;
+  const my = (e.clientY - rect.top) / mmEl.clientHeight;
+  const sx2 = stage.clientWidth / totalW, sy2 = stage.clientHeight / totalH, ms = Math.min(sx2, sy2);
+  const wx = mx * totalW, wy = my * totalH;
+  tx = stage.clientWidth / 2 - wx * scale;
+  ty = stage.clientHeight / 2 - wy * scale;
+  applyTransform();
+});
+
+// ── STARFIELD ─────────────────────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('starfield');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+  function init() {
+    resize();
+    stars = Array.from({length: 70}, () => ({
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+      r: Math.random() * 1.1 + 0.2, a: Math.random() * 0.4 + 0.08,
+      speed: Math.random() * 0.12 + 0.04, phase: Math.random() * Math.PI * 2
+    }));
+  }
+  function draw(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      const alpha = s.a * (0.6 + 0.4 * Math.sin(t * 0.001 * s.speed + s.phase));
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(232,184,109,${alpha})`; ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  init(); window.addEventListener('resize', init); requestAnimationFrame(draw);
+})();
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Draw edges after layout so offsetHeight is accurate
+  drawEdges(root);
+  fitToScreen();
+  drawMinimap();
+});
+window.addEventListener('resize', () => { fitToScreen(); drawMinimap(); });
+</script>
+</body>
+</html>
